@@ -21,6 +21,8 @@
 % correct bad hyphenation here
 %\hyphenation{op-tical net-works semi-conduc-tor}
 
+\usepackage{url}
+
 \begin{document}
 
 % naslov prispevka, lahko uporabite en linebreak \\
@@ -31,9 +33,9 @@
 \address{University of Ljubljana, Faculty of Computer and Information Science, Večna pot 113, 1000 Ljubljana, Slovenia\\
 E-mail: mm3058@student.uni-lj.si}
 
-\abstract{TODO}
+\abstract{Because of accessibility, many native applications transitioned to the web. Additionally many users are using social login option on the daily bases. In this paper we will discuss various techniques for Cross-Site Request Forgery attack mitigation; specifically we will illustrate possible attack on OAuth 2.0 authorization protocol.}
 
-\keywords{Cross-Site Request Forger, CSRF, XSRF, XSFR, OAuth 2.0}
+\keywords{Cross-Site Request Forger, CSRF, XSRF, XSFR, OAuth 2.0, OpenID Connect 1.0}
 
 % Priimki avtorjev in kratek naslov članka za tekočo glavo
 \markboth{Mav}{Mitigating Cross-Site Request Forgery Attacks}
@@ -46,13 +48,11 @@ E-mail: mm3058@student.uni-lj.si}
 \section{Introduction}
 \label{sec_introduction}
 
-Cross-Site Request Forgery is an attack where authenticated user executes unwanted action of attacker's choosing. This attacks usually target state-changing requests (for example executing unwanted bank transaction) and not compromising data secrecy. But it is also possible to attack the login process and this can lead to private data exposure \cite{barth2008robust}.
+Cross-Site Request Forgery (CSRF) is an attack where authenticated user executes unwanted action of attacker's choosing. This attacks usually target state-changing requests (for example executing unwanted bank transaction) and not compromising data secrecy. But it is also possible to attack the login process and this can lead to private data exposure \cite{barth2008robust}.
 
 In this paper, we will use CSRF as an abbreviation for Cross-Site Request Forgery. In other texts, we can notice XSRF or XSFR used as synonyms for CSRF abbreviation.
 
-The basis for this paper is an article called \textit{Mitigating CSRF attacks on OAuth 2.0 Systems} \cite{li2018mitigating} published in 2018.
-
-According to the OWASP\footnote{Open Web Application Security Project} Top 10 report from the year 2013 \cite{owasptopten}, cross-site request forgery attacks ware ranked at number 8 of top 10 most critical web application security risks. However, in the most recent OWASP Top 10 report form year 2017, CSRF is no longer on the list. Few of the reasons for its fall from the top 10 list are that \cite{owaspthefallofcsrf} (1) more frameworks are now offering secure-by-default settings, (2) new and improved browser standards for CSRF attack mitigation and (3) overall raised awareness for secure development.
+The basis for this paper is an article \textit{Mitigating CSRF attacks on OAuth 2.0 Systems} \cite{li2018mitigating} published in 2018.
 
 \section{CSRF background}
 \label{sec_csrfbackground}
@@ -71,21 +71,58 @@ To mitigate CSRF attacks we commonly use some combination of the following appro
 \begin{enumerate}
     \item The first approach uses randomly generated tokens that are sent at each HTTP request. These tokens are randomly generated on the server and then two copies are sent back to the browser. One copy is stored inside the cookie and the other one is injected into form. When the form is submitted, the server compares value stored inside a cookie with value submitted over form. If these two values are valid and match request is further processed, otherwise request is rejected \cite{li2018mitigating}.
     \item The second approach prevent execution requests that are initiated from different origins. This can be achieved using either (1) \texttt{Referer} request header, (2) custom HTTP headers or (3) \texttt{Origin} request header \cite{barth2008robust,li2018mitigating}. Each of this approaches can distinguish between same-origin or cross-origin requests.
-    \item The third and most recent approach \cite{owaspthefallofcsrf} is to use authentication cookie with \texttt{SameSite} attribute \cite{Goodwin2018Nov}. Cookies annotated with \texttt{SameSite} attribute are only   .
+    \item The third and most recent approach is to use authentication cookie with \texttt{SameSite} attribute \cite{Goodwin2018Nov}. Cookies annotated with \texttt{SameSite} attribute are only   .
 \end{enumerate}
 
-The second and third approach heavily relies on the specific browser and thus cannot be completely trusted.%The first approach requires HTTPS connection because the same token can be used multiple times and can be intercepted. Also, if our site is vulnerable to Cross-Site Scripting (XSS) attacks these mitigating techniques won't work.
+The second and third approach heavily relies on the specific browser and thus cannot be completely trusted.
 
 \section{OAuth 2.0 background}
+\label{sec_oauth2background}
+In this section we will briefly explain what authorization protocol OAuth 2.0 is and how it works.
 
-\section{Attack on OAuth 2.0}
+OAuth 2.0 \cite{Hardt2018Nov} allows an \textit{Client} to access resources protected by \textit{Resource Server} on behalf of the \textit{Resource Owner}. This is done by consuming access token issued by \textit{Authorization Server}. OAuth 2.0 protocol heavily relies on browser redirects and therefore can be subject of CSRF attack.
+
+OpenID Connect 1.0, which is an identity layer build on top of the OAuth 2.0 protocol, is commonly used for Single Sign-On (SSO) scenarios.
+
+OAuth 2.0 has four different protocol flows \cite{Hardt2018Nov}. Here we will only discuss one of them; that is Implicit Grant flow. The protocol for Implicit Grant flow roughly proceeds as follows \cite{li2018mitigating}:
+\begin{enumerate}
+    \item The user connects to the client application and clicks a social login button.
+    \item The browser redirects user to the authorization server with following query parameters: (1) \texttt{response\_type=token} indicating Implicit Grant flow, (2) \texttt{state}, (3) \texttt{scope} of the request permissions, (4) \texttt{client\_id} and (5) \texttt{redirect\_uri}.
+    \item The authorization server first validate \texttt{client\_id} and registered redirect URI with \texttt{redirect\_uri} parameter. If there is a match, process continues.
+    \item The user enter credentials and grants permissions for the requested \texttt{scope}s.
+    \item The authorization server generates an \texttt{access\_token} and redirects back to the \texttt{redirect\_uri} following by symbol \texttt{\#} and then by the generated \texttt{access\_token}.
+    \item The client application stores \texttt{access\_token} for later usage.
+\end{enumerate}
+
+\section{CSRF attack on OAuth 2.0}
+\label{sec_csrfattackonoauth2}
+
+CSRF attack against OAuth 2.0 \texttt{redirect\_uri} can allow an attacker to associates the victim’s session with the attacker’s \texttt{access\_token}. The victim then accesses the protected resource on behalf of the attacker. This can lead to private data exposure; i.e. the user might upload private data to the attacker’s account.
+
+The attacker can achieve this by first obtains his \texttt{access\_token} and then aborts the redirect flow. Then the attacker tricks the victim to execute the attacker’s redirect flow, by this victim’s session gets associated by the attacker’s \texttt{access\_token}.
+
+Because OAuth 2.0 protocol relies on cross-origin requests to obtain an \texttt{access\_token}, previously discussed mitigation approaches don't apply to this kind of attack. The exception is the first approach that uses secret token; this can be translated into \texttt{state} parameter.
+
+In practice this mitigation approach is commonly not used or it is misused. Therefore the authors of article \textit{Mitigating CSRF attacks on OAuth 2.0 Systems} \cite{li2018mitigating} suggest another simple approach. They suggest validation of the \texttt{Referer} request header value with authorization server domain name.
 
 \section{Conclusions}
+\label{sec_conclusions}
+
+According to the OWASP Top 10 report from the year 2013 \cite{owasptopten}, Cross-Site Request Forgery attacks ware ranked at number 8 of top 10 most critical web application security risks. However, in the most recent OWASP Top 10 report form year 2017, CSRF is no longer on the list.
+
+We believe that few of the reasons for its fall from the top 10 list are:
+\begin{enumerate}
+    \item More frameworks are now offering secure-by-default settings.
+    \item New and improved browser standards were introduced for CSRF attack mitigation.
+    \item Raised overall awareness for secure development.
+\end{enumerate}
 
 \small
 \bibliographystyle{plain}
 \bibliography{bibliography}
 
 \vfill
+
+\label{finish}
 
 \end{document}
